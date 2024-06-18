@@ -99,6 +99,8 @@ type ClientConfig struct {
 	// HTTP2PingTimeout if there's no response to the ping within the configured value, the connection will be closed.
 	// If not set or set to 0, it defaults to 15s.
 	HTTP2PingTimeout time.Duration `mapstructure:"http2_ping_timeout"`
+
+	LocalAddress string `mapstructure:"local_address"`
 }
 
 // NewDefaultClientConfig returns ClientConfig type object with
@@ -123,6 +125,26 @@ func (hcs *ClientConfig) ToClient(ctx context.Context, host component.Host, sett
 		return nil, err
 	}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+
+	if hcs.LocalAddress != "" {
+		localAddr, err := net.ResolveIPAddr("ip", hcs.LocalAddress)
+		if err != nil {
+			return nil, err
+		}
+
+		localTCPAddr := net.TCPAddr{
+			IP: localAddr.IP,
+		}
+
+		dialer := net.Dialer{
+			LocalAddr: &localTCPAddr,
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}
+
+		transport.DialContext = dialer.DialContext
+	}
+
 	if tlsCfg != nil {
 		transport.TLSClientConfig = tlsCfg
 	}
