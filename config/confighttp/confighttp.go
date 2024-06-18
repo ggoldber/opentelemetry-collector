@@ -100,7 +100,8 @@ type ClientConfig struct {
 	// If not set or set to 0, it defaults to 15s.
 	HTTP2PingTimeout time.Duration `mapstructure:"http2_ping_timeout"`
 
-	LocalAddress string `mapstructure:"local_address"`
+	LocalAddress         string `mapstructure:"local_address"`
+	LocalAddressProtocol string `mapstructure:"local_address_protocol"`
 }
 
 // NewDefaultClientConfig returns ClientConfig type object with
@@ -118,6 +119,29 @@ func NewDefaultClientConfig() ClientConfig {
 	}
 }
 
+func (hcs *ClientConfig) ToLocalTCPAddress() (net.Addr, error) {
+	protocol := hcs.LocalAddressProtocol
+	if protocol == "" {
+		protocol = "ip"
+	}
+	switch protocol {
+	case "ip", "ip6":
+		localAddr, err := net.ResolveIPAddr(hcs.LocalAddressProtocol, hcs.LocalAddress)
+		if err != nil {
+			return nil, err
+		}
+		addr := net.TCPAddr{
+			IP:   localAddr.IP,
+			Zone: localAddr.Zone,
+		}
+		return &addr, nil
+	case "tcp", "tcp6":
+		return net.ResolveTCPAddr(hcs.LocalAddressProtocol, hcs.LocalAddress)
+	default:
+		return nil, net.UnknownNetworkError(hcs.LocalAddressProtocol)
+	}
+}
+
 // ToClient creates an HTTP client.
 func (hcs *ClientConfig) ToClient(ctx context.Context, host component.Host, settings component.TelemetrySettings) (*http.Client, error) {
 	tlsCfg, err := hcs.TLSSetting.LoadTLSConfig(ctx)
@@ -127,19 +151,14 @@ func (hcs *ClientConfig) ToClient(ctx context.Context, host component.Host, sett
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 
 	if hcs.LocalAddress != "" {
-		localAddr, err := net.ResolveIPAddr("ip", hcs.LocalAddress)
+		addr, err := hcs.ToLocalTCPAddress()
+
 		if err != nil {
 			return nil, err
 		}
 
-		localTCPAddr := net.TCPAddr{
-			IP: localAddr.IP,
-		}
-
 		dialer := net.Dialer{
-			LocalAddr: &localTCPAddr,
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
+			LocalAddr: addr,
 		}
 
 		transport.DialContext = dialer.DialContext
