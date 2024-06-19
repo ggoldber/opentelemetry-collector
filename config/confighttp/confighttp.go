@@ -126,7 +126,7 @@ func (hcs *ClientConfig) ToLocalTCPAddress() (net.Addr, error) {
 	}
 	switch protocol {
 	case "ip", "ip6":
-		localAddr, err := net.ResolveIPAddr(hcs.LocalAddressProtocol, hcs.LocalAddress)
+		localAddr, err := net.ResolveIPAddr(protocol, hcs.LocalAddress)
 		if err != nil {
 			return nil, err
 		}
@@ -136,9 +136,9 @@ func (hcs *ClientConfig) ToLocalTCPAddress() (net.Addr, error) {
 		}
 		return &addr, nil
 	case "tcp", "tcp6":
-		return net.ResolveTCPAddr(hcs.LocalAddressProtocol, hcs.LocalAddress)
+		return net.ResolveTCPAddr(protocol, hcs.LocalAddress)
 	default:
-		return nil, net.UnknownNetworkError(hcs.LocalAddressProtocol)
+		return nil, net.UnknownNetworkError(protocol)
 	}
 }
 
